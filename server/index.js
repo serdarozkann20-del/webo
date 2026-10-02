@@ -17,7 +17,7 @@ const readBody = req => new Promise((resolve,reject)=>{ let data=''; req.on('dat
 async function deepSearch(query, subject='Tümü') {
   const clean = `${query} KPSS önlisans ${subject !== 'Tümü' ? subject : ''}`.trim();
   if (process.env.TAVILY_API_KEY) {
-    const r = await fetch(TAVILY_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({api_key:process.env.TAVILY_API_KEY,query:clean,search_depth:'advanced,',include_answer:true,max_results:8,include_domains:['osym.gov.tr','meb.gov.tr']})});
+    const r = await fetch(TAVILY_URL,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({api_key:process.env.TAVILY_API_KEY,query:clean,search_depth:'advanced',include_answer:true,max_results:8,include_domains:['osym.gov.tr','meb.gov.tr']})});
     if (!r.ok) throw new Error(`Arama sağlayıcısı ${r.status} döndürdü`);
     const data=await r.json();
     return {query,answer:data.answer||'Kaynaklardan derlenen sonuçlar aşağıda.',sources:(data.results||[]).map(x=>({title:x.title,url:x.url,content:x.content,domain:new URL(x.url).hostname}))};
