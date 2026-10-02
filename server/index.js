@@ -1,8 +1,13 @@
 import 'dotenv/config';
 import http from 'node:http';
 import { URL } from 'node:url';
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const PORT = Number(process.env.PORT || 8787);
+const ROOT = path.dirname(fileURLToPath(import.meta.url));
+const DIST = path.join(ROOT, '..', 'dist');
 const TAVILY_URL = 'https://api.tavily.com/search';
 const TELEGRAM = `https://api.telegram.org/bot${process.env.TELEGRAM_BOT_TOKEN || ''}`;
 
@@ -27,6 +32,6 @@ async function runBot(){
  while(true){try{const data=await telegram('getUpdates',{offset,timeout:25,allowed_updates:['message']}); for(const u of data.result||[]){offset=u.update_id+1; const msg=u.message; if(!msg?.text) continue; const text=msg.text.trim(); if(text==='/start'){await telegram('sendMessage',{chat_id:msg.chat.id,text:'Merhaba! KPSS Cepte Deep Search botuna hoş geldin.\n\nAramak için: /ara Osmanlı kültür ve medeniyeti\n\nKaynaklar ÖSYM ve MEB öncelikli taranır.'});continue} if(text==='/help'){await telegram('sendMessage',{chat_id:msg.chat.id,text:'Komutlar:\n/ara <konu> — güvenilir kaynaklarda ara\n/start — botu başlat'});continue} if(text.startsWith('/ara ')||text.startsWith('/search ')){const q=text.replace(/^\/(ara|search)\s+/,'').trim(); if(!q){await telegram('sendMessage',{chat_id:msg.chat.id,text:'Aramak istediğin konuyu yaz: /ara Türkiye coğrafyası'});continue} await telegram('sendChatAction',{chat_id:msg.chat.id,action:'typing'}); try{const out=await deepSearch(q); const sources=out.sources.slice(0,5).map((s,i)=>`${i+1}. ${s.title}\n${s.url}`).join('\n\n'); await telegram('sendMessage',{chat_id:msg.chat.id,text:compact(`🔎 ${q}\n\n${out.answer}\n\n📚 Kaynaklar\n${sources}`),disable_web_page_preview:true});}catch(e){await telegram('sendMessage',{chat_id:msg.chat.id,text:`Arama sırasında hata oluştu: ${e.message}`})}continue} await telegram('sendMessage',{chat_id:msg.chat.id,text:'Bir konu aramak için /ara komutunu kullan. Örnek: /ara anayasa temel haklar'}); }}catch(e){console.error('Telegram:',e.message);await new Promise(r=>setTimeout(r,3000));}}
 }
 
-const server=http.createServer(async(req,res)=>{const url=new URL(req.url,`http://${req.headers.host}`); if(req.method==='OPTIONS'){res.writeHead(204,{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST','access-control-allow-headers':'content-type'});return res.end()} if(url.pathname==='/api/health') return json(res,200,{ok:true,service:'kpss-cepte-api'}); if(url.pathname==='/api/search'&&req.method==='POST'){try{const body=await readBody(req); if(!body.query?.trim()) return json(res,400,{error:'Arama metni zorunlu'}); return json(res,200,await deepSearch(body.query,body.subject));}catch(e){return json(res,502,{error:e.message})}} json(res,404,{error:'Bulunamadı'});});
+const server=http.createServer(async(req,res)=>{const url=new URL(req.url,`http://${req.headers.host}`); if(req.method==='OPTIONS'){res.writeHead(204,{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST','access-control-allow-headers':'content-type'});return res.end()} if(url.pathname==='/api/health') return json(res,200,{ok:true,service:'kpss-cepte-api'}); if(url.pathname==='/api/search'&&req.method==='POST'){try{const body=await readBody(req); if(!body.query?.trim()) return json(res,400,{error:'Arama metni zorunlu'}); return json(res,200,await deepSearch(body.query,body.subject));}catch(e){return json(res,502,{error:e.message})}} if(req.method==='GET' && !url.pathname.startsWith('/api/')){const requested=path.normalize(path.join(DIST,url.pathname==='/'?'index.html':url.pathname));const file=requested.startsWith(DIST)&&fs.existsSync(requested)?requested:path.join(DIST,'index.html');if(fs.existsSync(file)){const ext=path.extname(file);const types={'.html':'text/html; charset=utf-8','.js':'text/javascript','.css':'text/css','.svg':'image/svg+xml','.png':'image/png','.jpg':'image/jpeg'};res.writeHead(200,{'content-type':types[ext]||'text/plain'});return fs.createReadStream(file).pipe(res)}} json(res,404,{error:'Bulunamadı'});});
 server.listen(PORT,'0.0.0.0',()=>console.log(`API http://0.0.0.0:${PORT}`));
 runBot();
